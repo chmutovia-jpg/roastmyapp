@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+﻿import { motion } from "framer-motion";
 import { MessageSquareText, RefreshCcw, Sparkles } from "lucide-react";
 import { useState } from "react";
 
@@ -62,7 +62,7 @@ export function ClarificationBox({ isRefining, onRefine }: ClarificationBoxProps
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="technical-label">CLARIFY AI</p>
-          <h2 className="font-editorial mt-3 text-4xl font-medium tracking-[-0.055em] text-[#101418]">
+          <h2 className="apple-heading font-apple-display mt-3 text-4xl text-[#101418]">
             AI не так понял?
           </h2>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-[#20262b]/58">

@@ -1,46 +1,89 @@
 import { getMockRoast } from "./mockRoast";
-import type { RoastInput, RoastResult } from "../types/roast";
-import { validateRoastResult } from "../utils/validateRoastResult";
+import type {
+  AnalysisFallbackReason,
+  AnalysisMeta,
+  AnalyzeProjectResponse,
+  RoastInput,
+} from "../types/roast";
+import { isResultAboutUserProject, repairRoastResult, validateRoastResult } from "../utils/validateRoastResult";
 
+const CLIENT_TIMEOUT_MS = 30_000;
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-const demoProjectNames = ["DayPilot", "Money Control", "StreakTogether"];
 
-function serializeResult(result: RoastResult) {
-  return [
-    result.projectName,
-    result.shortVerdict,
-    result.mainProblem,
-    result.firstFix,
-    result.improvedOffer.headline,
-    result.improvedOffer.subheadline,
-    result.rawFeedback,
-    ...result.whyUsersWillNotBuy,
-    ...result.twoHourFixes,
-    ...result.threadsPosts.map((post) => `${post.title} ${post.text}`),
-  ].join(" ");
+function createMeta(
+  source: AnalysisMeta["source"],
+  startedAt: number,
+  reason?: AnalysisFallbackReason,
+  model?: string,
+): AnalysisMeta {
+  return {
+    source,
+    ...(reason ? { reason } : {}),
+    ...(model ? { model } : {}),
+    durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+    createdAt: new Date().toISOString(),
+  };
 }
 
-function hasWrongProjectContext(input: RoastInput, result: RoastResult) {
-  const expectedName = input.projectName.trim() || "Проект без названия";
-  const actualName = result.projectName.trim();
-
-  if (actualName !== expectedName) return true;
-  if (input.source === "demo") return false;
-
-  const serialized = serializeResult(result);
-  return demoProjectNames.some(
-    (name) => name !== expectedName && new RegExp(`\\b${name}\\b`, "i").test(serialized),
-  );
+function createMockResponse(
+  input: RoastInput,
+  startedAt: number,
+  reason: AnalysisFallbackReason,
+): AnalyzeProjectResponse {
+  return {
+    result: getMockRoast(input),
+    meta: createMeta("mock", startedAt, reason),
+  };
 }
 
-export async function analyzeProject(input: RoastInput): Promise<RoastResult> {
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : error instanceof Error && error.name === "AbortError";
+}
+
+function normalizeBackendPayload(
+  payload: unknown,
+  input: RoastInput,
+  startedAt: number,
+): AnalyzeProjectResponse {
+  if (payload && typeof payload === "object" && "result" in payload) {
+    const record = payload as Record<string, unknown>;
+    const strict = validateRoastResult(record.result);
+    const repaired = strict || repairRoastResult(record.result, input);
+    const metaRecord = record.meta && typeof record.meta === "object" ? (record.meta as AnalysisMeta) : null;
+    const meta: AnalysisMeta = {
+      source: metaRecord?.source === "openai" ? "openai" : "mock",
+      ...(metaRecord?.reason ? { reason: metaRecord.reason } : {}),
+      ...(metaRecord?.model ? { model: metaRecord.model } : {}),
+      durationMs:
+        typeof metaRecord?.durationMs === "number"
+          ? metaRecord.durationMs
+          : Math.max(0, Math.round(performance.now() - startedAt)),
+      createdAt: metaRecord?.createdAt || new Date().toISOString(),
+    };
+
+    return { result: repaired, meta };
+  }
+
+  const strict = validateRoastResult(payload);
+  const result = strict || repairRoastResult(payload, input);
+
+  return {
+    result,
+    meta: createMeta(strict ? "openai" : "mock", startedAt, strict ? undefined : "invalid_ai_result"),
+  };
+}
+
+export async function analyzeProject(input: RoastInput): Promise<AnalyzeProjectResponse> {
+  const startedAt = performance.now();
   const requestInput: RoastInput = {
     source: "user",
     clarificationHistory: [],
     ...input,
   };
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 9000);
+  const timeoutId = window.setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
 
   try {
     const response = await fetch("/api/analyze-roast", {
@@ -57,20 +100,27 @@ export async function analyzeProject(input: RoastInput): Promise<RoastResult> {
     }
 
     const payload = await response.json();
-    const validated = validateRoastResult(payload);
+    const normalized = normalizeBackendPayload(payload, requestInput, startedAt);
 
-    if (!validated) {
-      throw new Error("Roast API returned invalid payload");
+    if (!isResultAboutUserProject(normalized.result, requestInput)) {
+      return createMockResponse(requestInput, startedAt, "wrong_project_context");
     }
 
-    if (hasWrongProjectContext(requestInput, validated)) {
-      return getMockRoast(requestInput);
+    if (normalized.meta.source === "mock") {
+      console.info("[roast-client] AI source: mock", {
+        reason: normalized.meta.reason || "unknown",
+        durationMs: normalized.meta.durationMs,
+      });
     }
 
-    return validated;
-  } catch {
-    await sleep(1200);
-    return getMockRoast(requestInput);
+    return normalized;
+  } catch (error) {
+    await sleep(900);
+    return createMockResponse(
+      requestInput,
+      startedAt,
+      isAbortError(error) ? "client_timeout" : "api_error",
+    );
   } finally {
     window.clearTimeout(timeoutId);
   }

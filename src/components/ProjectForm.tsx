@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+﻿import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
@@ -109,7 +109,7 @@ export function ProjectForm({ input, onChange, onContinue, onBack, onDemoFill }:
             Назад
           </button>
           <StepIndicator current="signal" />
-          <h1 className="font-editorial mt-5 max-w-2xl text-4xl font-medium leading-[0.98] tracking-[-0.055em] text-[#101418] sm:text-6xl">
+          <h1 className="apple-heading font-apple-display mt-5 max-w-2xl text-4xl text-[#101418] sm:text-6xl">
             Дай AI достаточно сигнала.
           </h1>
           <p className="mt-4 max-w-xl text-sm leading-7 text-[#20262b]/58">

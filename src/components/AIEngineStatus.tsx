@@ -1,19 +1,18 @@
 import { Activity, Gauge } from "lucide-react";
-import type { RoastInput, RoastResult } from "../types/roast";
+import type { AnalysisMeta, RoastInput, RoastResult } from "../types/roast";
 import { analysisDepthLabels, roastModeLabels } from "../types/roast";
-import { isDemoAnalysis, isMockAnalysis } from "../services/mockRoast";
 import { calculateInputQuality } from "../utils/calculateInputQuality";
 
 type AIEngineStatusProps = {
   input: RoastInput;
   result?: RoastResult | null;
+  meta?: AnalysisMeta | null;
   lastAnalysisTime?: string;
 };
 
-export function AIEngineStatus({ input, result, lastAnalysisTime }: AIEngineStatusProps) {
+export function AIEngineStatus({ input, meta, lastAnalysisTime }: AIEngineStatusProps) {
   const quality = calculateInputQuality(input);
-  const demoMode = result ? isDemoAnalysis(result) : input.source === "demo";
-  const mockMode = result ? isMockAnalysis(result) : true;
+  const source = meta?.source || "mock";
   const context = Math.max(12, quality.score);
 
   return (
@@ -26,10 +25,8 @@ export function AIEngineStatus({ input, result, lastAnalysisTime }: AIEngineStat
       </div>
 
       <div className="space-y-3 text-sm">
-        <StatusRow
-          label="Status"
-          value={demoMode ? "Demo analysis" : mockMode ? "Mock analysis" : "Real AI mode"}
-        />
+        <StatusRow label="Status" value={source === "openai" ? "Real AI mode" : "Demo analysis"} />
+        {meta?.reason && import.meta.env.DEV ? <StatusRow label="Reason" value={meta.reason} /> : null}
         <StatusRow label="Signal" value={quality.level === "weak" ? "Weak" : quality.level === "strong" ? "Strong" : "Medium"} />
         <StatusRow label="Mode" value={roastModeLabels[input.roastMode]} />
         <StatusRow label="Depth" value={analysisDepthLabels[input.analysisDepth]} />

@@ -11,9 +11,9 @@ import {
   Wand2,
 } from "lucide-react";
 import { useState } from "react";
-import { isDemoAnalysis, isMockAnalysis } from "../services/mockRoast";
 import {
   roastModeLabels,
+  type AnalysisMeta,
   type AnalysisDepth,
   type RoastInput,
   type RoastMode,
@@ -21,9 +21,13 @@ import {
 } from "../types/roast";
 import { formatFullReport, formatOffer, formatThreadsPosts } from "../utils/formatReport";
 import { AIEngineStatus } from "./AIEngineStatus";
+import { AnalysisSourceBadge } from "./AnalysisSourceBadge";
+import { BeforeAfterOffer } from "./BeforeAfterOffer";
 import { ClarificationBox } from "./ClarificationBox";
 import { CopyButton } from "./CopyButton";
+import { LaunchPack } from "./LaunchPack";
 import { ResultSectionNav, type ResultSection } from "./ResultSectionNav";
+import { ShareCardPreview } from "./ShareCardPreview";
 import { StepIndicator } from "./StepIndicator";
 import { ThreadsPosts } from "./ThreadsPosts";
 import { WeakPointsGrid } from "./WeakPointsGrid";
@@ -31,6 +35,7 @@ import { WeakPointsGrid } from "./WeakPointsGrid";
 type ResultViewProps = {
   input: RoastInput;
   result: RoastResult;
+  meta: AnalysisMeta;
   saved: boolean;
   lastAnalysisTime?: string;
   onBackToMode: () => void;
@@ -39,6 +44,7 @@ type ResultViewProps = {
   onToneAdjust: (mode: RoastMode, analysisDepth?: AnalysisDepth) => void;
   onRefine: (clarificationText: string) => void;
   isRefining: boolean;
+  onCompareVersions?: () => void;
 };
 
 const actionButtons: { label: string; mode: RoastMode; depth?: AnalysisDepth; Icon: typeof Wand2 }[] = [
@@ -58,6 +64,7 @@ const reveal = {
 export function ResultView({
   input,
   result,
+  meta,
   saved,
   lastAnalysisTime,
   onBackToMode,
@@ -66,10 +73,9 @@ export function ResultView({
   onToneAdjust,
   onRefine,
   isRefining,
+  onCompareVersions,
 }: ResultViewProps) {
   const [activeSection, setActiveSection] = useState<ResultSection>("audit");
-  const demo = isDemoAnalysis(result);
-  const mock = isMockAnalysis(result);
   const firstFix = result.firstFix || result.twoHourFixes[0] || "Переписать первый экран.";
   const confidence = result.confidence ?? 64;
   const version = result.version || 1;
@@ -122,16 +128,7 @@ export function ResultView({
         >
           <div className="flex flex-wrap items-center gap-2">
             <span className="technical-label-dark">Разбор готов</span>
-            {demo ? (
-              <span className="rounded-full border border-white/12 bg-white/[0.07] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/56">
-                Demo analysis
-              </span>
-            ) : null}
-            {!demo && mock ? (
-              <span className="rounded-full border border-white/12 bg-white/[0.07] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/56">
-                Mock analysis
-              </span>
-            ) : null}
+            <AnalysisSourceBadge meta={meta} dark />
             <span className="rounded-full border border-white/12 bg-white/[0.07] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/56">
               {roastModeLabels[input.roastMode]}
             </span>
@@ -142,7 +139,7 @@ export function ResultView({
 
           <div className="mt-8 grid gap-7 lg:grid-cols-[220px_1fr] lg:items-end">
             <div>
-              <div className="font-editorial text-[6.4rem] font-medium leading-[0.78] tracking-[-0.08em] text-white">
+              <div className="font-apple-display text-[6.4rem] font-medium leading-[0.78] tracking-[-0.08em] text-white">
                 {result.score.toFixed(1)}
               </div>
               <div className="mt-3 text-sm font-bold uppercase tracking-[0.18em] text-white/36">/ 10</div>
@@ -156,7 +153,7 @@ export function ResultView({
               </div>
             </div>
             <div>
-              <h1 className="font-editorial text-4xl font-medium leading-[0.98] tracking-[-0.055em] text-white sm:text-6xl">
+              <h1 className="apple-heading font-apple-display text-4xl text-white sm:text-6xl">
                 {result.projectName || input.projectName || "Проект без названия"}
               </h1>
               <p className="mt-5 max-w-2xl text-2xl font-medium leading-tight tracking-[-0.04em] text-white/86">
@@ -176,13 +173,19 @@ export function ResultView({
           </div>
         </motion.div>
 
-        <AIEngineStatus input={input} result={result} lastAnalysisTime={lastAnalysisTime} />
+        <AIEngineStatus input={input} result={result} meta={meta} lastAnalysisTime={lastAnalysisTime} />
       </div>
 
       <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_0.78fr]">
         <ClarificationBox isRefining={isRefining} onRefine={onRefine} />
         <AssumptionsBlock result={result} />
       </div>
+
+      {input.screenshotMeta?.removedFromHistory ? (
+        <div className="mt-4 rounded-[1.4rem] border border-black/10 bg-white/44 px-4 py-3 text-sm font-medium text-[#20262b]/58 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]">
+          Скрин не хранится в истории, чтобы не забивать браузер. Сам разбор сохранен.
+        </div>
+      ) : null}
 
       <div className="mt-6">
         <ResultSectionNav active={activeSection} onChange={setActiveSection} />
@@ -204,7 +207,7 @@ export function ResultView({
                 <ol className="mt-6 space-y-4">
                   {result.whyUsersWillNotBuy.map((item, index) => (
                     <li key={`${item}-${index}`} className="grid grid-cols-[48px_1fr] gap-4 border-t border-black/10 pt-4">
-                      <span className="font-editorial text-3xl tracking-[-0.06em] text-[#101418]/46">
+                      <span className="font-apple-display text-3xl tracking-[-0.06em] text-[#101418]/46">
                         {String(index + 1).padStart(2, "0")}
                       </span>
                       <span className="text-sm leading-7 text-[#20262b]/66">{item}</span>
@@ -226,46 +229,54 @@ export function ResultView({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -14 }}
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              className="grid gap-5 lg:grid-cols-[1fr_0.9fr]"
+              className="space-y-5"
             >
-              <article className="liquid-panel rounded-[2.2rem] p-6">
-                <p className="technical-label">2-HOUR FIXES</p>
-                <h2 className="font-editorial mt-2 text-4xl font-medium tracking-[-0.055em] text-[#101418]">
-                  Исправить сегодня
-                </h2>
-                <ul className="mt-7 grid gap-3">
-                  {result.twoHourFixes.map((item, index) => (
-                    <li
-                      key={`${item}-${index}`}
-                      className="group flex gap-4 rounded-[1.4rem] border border-black/10 bg-white/36 p-4 transition hover:bg-white/64"
-                    >
-                      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-black/18 text-[#20262b]/54 transition group-hover:bg-[#101418] group-hover:text-white">
-                        <Check className="h-3.5 w-3.5" />
-                      </span>
-                      <span className="text-sm leading-7 text-[#20262b]/66">{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </article>
+              <div className="grid gap-5 lg:grid-cols-[1fr_0.9fr]">
+                <article className="liquid-panel rounded-[2.2rem] p-6">
+                  <p className="technical-label">2-HOUR FIXES</p>
+                <h2 className="apple-heading font-apple-display mt-2 text-4xl text-[#101418]">
+                    Исправить сегодня
+                  </h2>
+                  <ul className="mt-7 grid gap-3">
+                    {result.twoHourFixes.map((item, index) => (
+                      <li
+                        key={`${item}-${index}`}
+                        className="group flex gap-4 rounded-[1.4rem] border border-black/10 bg-white/36 p-4 transition hover:bg-white/64"
+                      >
+                        <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-black/18 text-[#20262b]/54 transition group-hover:bg-[#101418] group-hover:text-white">
+                          <Check className="h-3.5 w-3.5" />
+                        </span>
+                        <span className="text-sm leading-7 text-[#20262b]/66">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
 
-              <article className="rounded-[2.2rem] border border-black/10 bg-[#f8f8f6]/78 p-6 shadow-[0_34px_90px_rgba(16,20,24,0.1),inset_0_1px_0_rgba(255,255,255,0.9)]">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="technical-label">IMPROVED OFFER</p>
-                    <h2 className="font-editorial mt-5 text-4xl font-medium leading-tight tracking-[-0.055em] text-[#101418]">
-                      {result.improvedOffer.headline}
-                    </h2>
+                <article className="rounded-[2.2rem] border border-black/10 bg-[#f8f8f6]/78 p-6 shadow-[0_34px_90px_rgba(16,20,24,0.1),inset_0_1px_0_rgba(255,255,255,0.9)]">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="technical-label">IMPROVED OFFER</p>
+                      <h2 className="apple-heading font-apple-display mt-5 text-4xl text-[#101418]">
+                        {result.improvedOffer.headline}
+                      </h2>
+                    </div>
+                    <CopyButton value={formatOffer(result)} label="Скопировать оффер" />
                   </div>
-                  <CopyButton value={formatOffer(result)} label="Скопировать оффер" />
-                </div>
-                <p className="mt-6 text-lg leading-8 text-[#20262b]/68">{result.improvedOffer.subheadline}</p>
-                <p className="mt-5 border-t border-black/10 pt-5 text-sm leading-7 text-[#20262b]/58">
-                  {result.improvedOffer.shortDescription}
-                </p>
-                <span className="mt-7 inline-flex min-h-12 items-center justify-center rounded-full bg-[#101418] px-6 text-sm font-semibold text-white shadow-[0_18px_48px_rgba(16,20,24,0.18)]">
-                  {result.improvedOffer.cta}
-                </span>
-              </article>
+                  <p className="mt-6 text-lg leading-8 text-[#20262b]/68">{result.improvedOffer.subheadline}</p>
+                  <p className="mt-5 border-t border-black/10 pt-5 text-sm leading-7 text-[#20262b]/58">
+                    {result.improvedOffer.shortDescription}
+                  </p>
+                  <span className="mt-7 inline-flex min-h-12 items-center justify-center rounded-full bg-[#101418] px-6 text-sm font-semibold text-white shadow-[0_18px_48px_rgba(16,20,24,0.18)]">
+                    {result.improvedOffer.cta}
+                  </span>
+                </article>
+              </div>
+              <BeforeAfterOffer
+                input={input}
+                result={result}
+                onCompareVersions={onCompareVersions}
+                onSimplify={() => onToneAdjust("mentor", "deep")}
+              />
             </motion.div>
           ) : null}
 
@@ -278,6 +289,8 @@ export function ResultView({
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
             >
               <ThreadsPosts result={result} />
+              <LaunchPack result={result} />
+              <ShareCardPreview result={result} />
             </motion.div>
           ) : null}
 
@@ -291,7 +304,7 @@ export function ResultView({
               className="liquid-panel rounded-[2.2rem] p-6"
             >
               <p className="technical-label">NEXT SPRINT</p>
-              <h2 className="font-editorial mt-2 text-4xl font-medium tracking-[-0.055em] text-[#101418]">
+              <h2 className="apple-heading font-apple-display mt-2 text-4xl text-[#101418]">
                 План на один день
               </h2>
               <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_1fr_1fr_1.2fr]">
@@ -370,7 +383,7 @@ function AssumptionsBlock({ result }: { result: RoastResult }) {
       >
         <div>
           <p className="technical-label">AI BASIS</p>
-          <h2 className="font-editorial mt-3 text-3xl font-medium tracking-[-0.055em] text-[#101418]">
+          <h2 className="apple-heading font-apple-display mt-3 text-3xl text-[#101418]">
             На чем основан разбор
           </h2>
         </div>

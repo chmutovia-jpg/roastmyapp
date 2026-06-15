@@ -5,12 +5,23 @@ export default {
     extend: {
       fontFamily: {
         sans: [
-          "Inter",
-          "ui-sans-serif",
-          "system-ui",
           "-apple-system",
           "BlinkMacSystemFont",
+          "SF Pro Display",
+          "SF Pro Text",
+          "Inter",
+          "Manrope",
           "Segoe UI",
+          "system-ui",
+          "sans-serif",
+        ],
+        display: [
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "SF Pro Display",
+          "Inter",
+          "Manrope",
+          "system-ui",
           "sans-serif",
         ],
       },

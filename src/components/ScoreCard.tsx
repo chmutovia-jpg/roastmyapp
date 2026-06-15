@@ -1,4 +1,4 @@
-import { Gauge } from "lucide-react";
+﻿import { Gauge } from "lucide-react";
 import { GlassCard } from "./GlassCard";
 
 type ScoreCardProps = {
@@ -20,7 +20,7 @@ export function ScoreCard({ score, caption }: ScoreCardProps) {
 
         <div className="mt-10 flex items-end justify-between gap-6">
           <div>
-            <div className="font-editorial text-[7rem] font-medium leading-[0.78] tracking-[-0.08em] text-white sm:text-[8.5rem]">
+            <div className="font-apple-display text-[7rem] font-medium leading-[0.78] tracking-[-0.08em] text-white sm:text-[8.5rem]">
               {score.toFixed(1)}
             </div>
             <div className="mt-3 text-sm font-bold uppercase tracking-[0.18em] text-white/36">/ 10</div>

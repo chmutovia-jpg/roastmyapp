@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+﻿import { motion } from "framer-motion";
 import { ArrowRight, Eye, History, MoveUpRight } from "lucide-react";
 import { DemoProjectPicker } from "./DemoProjectPicker";
 import type { DemoProject } from "../utils/demoProjects";
@@ -48,7 +48,7 @@ export function Hero({ historyCount, onStart, onDemo, onDemoSelect, onHistory }:
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.06, duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
-          className="font-editorial max-w-4xl text-[2.45rem] font-medium leading-[0.96] tracking-[-0.055em] text-[#101418] min-[390px]:text-[2.75rem] sm:text-[4.8rem] lg:text-[6rem]"
+          className="hero-title font-apple-display max-w-[1050px] text-[#101418]"
         >
           Твой проект выглядит нормально.
           <span className="block text-[#111416]/58">Пока AI его не разнес.</span>
@@ -123,7 +123,7 @@ export function Hero({ historyCount, onStart, onDemo, onDemoSelect, onHistory }:
                 </h2>
               </div>
               <div className="text-right">
-                <div className="font-editorial text-5xl leading-none tracking-[-0.06em] text-[#101418]">
+                <div className="font-apple-display text-5xl leading-none tracking-[-0.06em] text-[#101418]">
                   6.4
                 </div>
                 <div className="text-xs font-bold uppercase tracking-[0.16em] text-[#20262b]/42">

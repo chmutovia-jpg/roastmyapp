@@ -9,12 +9,65 @@ export type RoastMode =
 
 export type AnalysisDepth = "fast" | "deep" | "launch";
 export type RoastSource = "user" | "demo";
+export type AcquisitionSource =
+  | "threads"
+  | "friends"
+  | "search"
+  | "telegram"
+  | "youtube"
+  | "other";
+export type AnalysisSource = "openai" | "mock";
+export type AnalysisFallbackReason =
+  | "missing_api_key"
+  | "api_error"
+  | "api_timeout"
+  | "invalid_json"
+  | "invalid_ai_result"
+  | "wrong_project_context"
+  | "empty_response"
+  | "client_timeout"
+  | "unknown";
+
+export type AnalysisMeta = {
+  source: AnalysisSource;
+  reason?: AnalysisFallbackReason;
+  model?: string;
+  durationMs?: number;
+  createdAt: string;
+};
+
+export type AnalyzeProjectResponse = {
+  result: RoastResult;
+  meta: AnalysisMeta;
+};
 
 export type ClarificationMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
   createdAt: string;
+};
+
+export type UserProfile = {
+  id: string;
+  email: string;
+  name?: string;
+  acquisitionSource: AcquisitionSource;
+  acquisitionSourceOther?: string;
+  createdAt: string;
+  lastActiveAt: string;
+  isLocalProfile: boolean;
+  wantsEarlyAccess?: boolean;
+};
+
+export type AcquisitionStats = Record<AcquisitionSource, number>;
+
+export type UsageStats = {
+  anonymousAnalyses: number;
+  registeredAnalyses: number;
+  clarifications: number;
+  lastAnalysisAt?: string;
+  resetAt?: string;
 };
 
 export type WeakPointKey =
@@ -41,10 +94,24 @@ export type RoastInput = {
   roastMode: RoastMode;
   analysisDepth: AnalysisDepth;
   screenshotBase64?: string;
+  hasScreenshot?: boolean;
+  screenshotMeta?: {
+    attached: boolean;
+    removedFromHistory: boolean;
+  };
   additionalContext?: string;
   userCounterArgument?: string;
   clarificationHistory?: ClarificationMessage[];
   source?: RoastSource;
+};
+
+export type RoastInputForHistory = Omit<RoastInput, "screenshotBase64"> & {
+  screenshotBase64?: never;
+  hasScreenshot?: boolean;
+  screenshotMeta?: {
+    attached: boolean;
+    removedFromHistory: boolean;
+  };
 };
 
 export type RoastResult = {
@@ -84,19 +151,46 @@ export type RoastResult = {
   assumptions: string[];
   misunderstoodRisk: string[];
   questionsToClarify: string[];
+  launchPack?: {
+    telegramPost: string;
+    profileBio: string;
+    landingHeadline: string;
+    replyComments: string[];
+  };
   rawFeedback: string;
   version?: number;
   refinedFromId?: string;
   clarificationCount?: number;
 };
 
+export type ProjectVersion = {
+  id: string;
+  version: number;
+  input: RoastInputForHistory;
+  result: RoastResult;
+  meta?: AnalysisMeta;
+  createdAt: string;
+  clarificationText?: string;
+};
+
+export type ProjectWorkspace = {
+  id: string;
+  userId?: string;
+  projectName: string;
+  createdAt: string;
+  updatedAt: string;
+  source: RoastSource;
+  versions: ProjectVersion[];
+};
+
 export type RoastHistoryItem = {
   id: string;
   createdAt: string;
   updatedAt?: string;
-  input: RoastInput;
-  originalInput?: RoastInput;
+  input: RoastInputForHistory;
+  originalInput?: RoastInputForHistory;
   result: RoastResult;
+  meta?: AnalysisMeta;
   version?: number;
   refinedFromId?: string;
 };

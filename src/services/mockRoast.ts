@@ -266,6 +266,25 @@ function buildImprovedOffer(input: RoastInput, projectName: string, contextSumma
   };
 }
 
+function buildLaunchPack(
+  projectName: string,
+  contextSummary: string,
+  improvedOffer: RoastResult["improvedOffer"],
+): NonNullable<RoastResult["launchPack"]> {
+  return {
+    telegramPost: `Запустил ${projectName}. Это пока ранняя версия, но уже понятно главное: проект должен не звучать умно, а быстро показывать пользу. Сейчас переписываю оффер вокруг результата: ${improvedOffer.headline}`,
+    profileBio: `${projectName} помогает превратить идею “${contextSummary}” в понятный первый результат и следующий шаг.`,
+    landingHeadline: improvedOffer.headline,
+    replyComments: [
+      "Да, сейчас как раз проверяю, что люди понимают за первые 5 секунд.",
+      "Главная правка после разбора — меньше фич, больше результата на первом экране.",
+      "Собираю раннюю обратную связь, чтобы не строить красивую штуку в пустоту.",
+      "Если коротко: перепаковываю оффер так, чтобы было ясно, кому и зачем.",
+      "Спасибо, это как раз тот тип реакции, который помогает докрутить запуск.",
+    ],
+  };
+}
+
 export function createContextAwareMockResult(input: RoastInput): RoastResult {
   const mode = modeCopy[input.roastMode];
   const depth = depthCopy[input.analysisDepth || "fast"];
@@ -295,6 +314,7 @@ export function createContextAwareMockResult(input: RoastInput): RoastResult {
   const score = clampScore(baseScore);
   const firstFix = buildFirstFix(input, contextSummary);
   const improvedOffer = buildImprovedOffer(input, projectName, contextSummary);
+  const launchPack = buildLaunchPack(projectName, contextSummary, improvedOffer);
   const assumptions = buildAssumptions(input, projectName);
   const misunderstoodRisk = buildMisunderstoodRisk(input);
   const questionsToClarify = buildQuestions(input);
@@ -375,6 +395,7 @@ export function createContextAwareMockResult(input: RoastInput): RoastResult {
         : "Написать формат доступа: бесплатно, beta, ранний тариф или один понятный план.",
     ],
     improvedOffer,
+    launchPack,
     threadsPosts: [
       {
         title: "Я сделал...",

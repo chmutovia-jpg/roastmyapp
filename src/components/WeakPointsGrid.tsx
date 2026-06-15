@@ -1,4 +1,4 @@
-import type { RoastResult, WeakPointKey } from "../types/roast";
+﻿import type { RoastResult, WeakPointKey } from "../types/roast";
 import { weakPointLabels } from "../types/roast";
 
 type WeakPointsGridProps = {
@@ -26,7 +26,7 @@ export function WeakPointsGrid({ weakPoints }: WeakPointsGridProps) {
                   {weakPointLabels[key]}
                 </h3>
               </div>
-              <span className="font-editorial text-4xl leading-none tracking-[-0.06em] text-[#101418]">
+              <span className="font-apple-display text-4xl leading-none tracking-[-0.06em] text-[#101418]">
                 {point.score}
               </span>
             </div>

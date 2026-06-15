@@ -1,4 +1,4 @@
-import { MessageCircle } from "lucide-react";
+﻿import { MessageCircle } from "lucide-react";
 import type { RoastResult } from "../types/roast";
 import { formatThreadsPosts } from "../utils/formatReport";
 import { CopyButton } from "./CopyButton";
@@ -16,7 +16,7 @@ export function ThreadsPosts({ result }: ThreadsPostsProps) {
             <MessageCircle className="h-4 w-4 text-[#20262b]/44" />
             <span className="technical-label">THREADS OUTPUT</span>
           </div>
-          <h2 className="font-editorial mt-2 text-4xl font-medium tracking-[-0.05em] text-[#101418]">
+          <h2 className="apple-heading font-apple-display mt-2 text-4xl text-[#101418]">
             Посты, которые не звучат как пресс-релиз
           </h2>
         </div>

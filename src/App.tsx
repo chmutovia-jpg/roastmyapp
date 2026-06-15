@@ -1,34 +1,57 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Archive, CircleUserRound, FlaskConical, History, Home, ScanLine } from "lucide-react";
+import { CircleUserRound, FlaskConical, History, Home, ScanLine, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AnalysisLoading } from "./components/AnalysisLoading";
+import { AcquisitionDebugPanel } from "./components/AcquisitionDebugPanel";
 import { AnimatedBackground } from "./components/AnimatedBackground";
 import { Hero } from "./components/Hero";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { PremiumTeaser } from "./components/PremiumTeaser";
+import { ProfilePanel } from "./components/ProfilePanel";
 import { ProjectForm } from "./components/ProjectForm";
 import { ResultView } from "./components/ResultView";
 import { RoastModeSelector } from "./components/RoastModeSelector";
+import { SoftSignupModal } from "./components/SoftSignupModal";
 import { analyzeProject } from "./services/aiRoastClient";
 import { getMockRoast } from "./services/mockRoast";
 import {
-  addHistoryItem,
+  clearUserProfile,
+  createUserProfile,
+  getUserProfile,
+  updateUserProfile,
+  type CreateUserProfileInput,
+} from "./services/profile";
+import {
   deleteHistoryItem,
+  deleteProjectWorkspace,
+  incrementUsageStats,
   loadDraft,
   loadHistory,
+  loadProjectWorkspaces,
   loadSettings,
+  loadUsageStats,
   saveDraft,
+  saveProjectVersion,
   saveSettings,
 } from "./services/storage";
 import {
   emptyRoastInput,
+  type AcquisitionSource,
+  type AnalysisMeta,
+  type ProjectVersion,
+  type ProjectWorkspace,
   type RoastHistoryItem,
   type RoastInput,
   type RoastMode,
   type RoastResult,
+  type UsageStats,
+  type UserProfile,
 } from "./types/roast";
 import { demoProjects, type DemoProject } from "./utils/demoProjects";
+import { getUsageLimitState } from "./utils/usageLimit";
 
-type Screen = "home" | "input" | "mode" | "loading" | "result" | "history";
+type Screen = "home" | "input" | "mode" | "loading" | "result" | "history" | "profile";
+type SignupIntent = "save" | "limit" | "earlyAccess" | "profile";
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const hasInputSignal = (input: RoastInput) =>
@@ -42,6 +65,14 @@ function createId() {
 const formatAnalysisTime = () =>
   new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 
+const createLocalMeta = (reason?: AnalysisMeta["reason"]): AnalysisMeta => ({
+  source: "mock",
+  ...(reason ? { reason } : {}),
+  createdAt: new Date().toISOString(),
+});
+
+const fallbackNotice = "AI временно недоступен — показан локальный разбор.";
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [draft, setDraft] = useState<RoastInput>(() => {
@@ -54,8 +85,16 @@ export default function App() {
     };
   });
   const [result, setResult] = useState<RoastResult | null>(null);
+  const [analysisMeta, setAnalysisMeta] = useState<AnalysisMeta | null>(null);
   const [history, setHistory] = useState<RoastHistoryItem[]>(() => loadHistory());
-  const [savedId, setSavedId] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<ProjectWorkspace[]>(() => loadProjectWorkspaces());
+  const [profile, setProfile] = useState<UserProfile | null>(() => getUserProfile());
+  const [usageStats, setUsageStats] = useState<UsageStats>(() => loadUsageStats());
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(null);
+  const [savedVersionId, setSavedVersionId] = useState<string | null>(null);
+  const [signupOpen, setSignupOpen] = useState(false);
+  const [signupIntent, setSignupIntent] = useState<SignupIntent | null>(null);
+  const [premiumOpen, setPremiumOpen] = useState(false);
   const [softError, setSoftError] = useState("");
   const [lastAnalysisTime, setLastAnalysisTime] = useState("");
   const [isRefining, setIsRefining] = useState(false);
@@ -66,18 +105,23 @@ export default function App() {
   }, [draft]);
 
   const saved = useMemo(
-    () => Boolean(savedId && history.some((item) => item.id === savedId)),
-    [history, savedId],
+    () =>
+      Boolean(
+        savedVersionId &&
+          workspaces.some((workspace) => workspace.versions.some((version) => version.id === savedVersionId)),
+      ),
+    [savedVersionId, workspaces],
   );
 
   const updateDraft = (nextDraft: RoastInput) => {
     setDraft(nextDraft);
-    setSavedId(null);
+    setSavedVersionId(null);
   };
 
   const fillDemo = (project: DemoProject = demoProjects[0]) => {
     setDraft({ ...project.input, source: "demo", clarificationHistory: [] });
-    setSavedId(null);
+    setSavedVersionId(null);
+    setCurrentWorkspaceId(null);
     setScreen("input");
   };
 
@@ -85,55 +129,94 @@ export default function App() {
     const demoInput = { ...project.input, source: "demo" as const, clarificationHistory: [] };
     setDraft(demoInput);
     setResult(getMockRoast(demoInput));
-    setSavedId(null);
+    setAnalysisMeta(createLocalMeta());
+    setSavedVersionId(null);
+    setCurrentWorkspaceId(null);
     setLastAnalysisTime(formatAnalysisTime());
     setScreen("result");
   };
 
   const startAnalyze = async (mode = draft.roastMode, analysisDepth = draft.analysisDepth) => {
-    const nextInput = { source: "user" as const, clarificationHistory: [], ...draft, roastMode: mode, analysisDepth };
+    const limit = getUsageLimitState(profile, usageStats);
+    if (!limit.allowed) {
+      if (limit.reason === "signup_required") {
+        setSignupIntent("limit");
+        setSignupOpen(true);
+      } else {
+        setPremiumOpen(true);
+      }
+      return;
+    }
+
+    const nextInput = {
+      ...draft,
+      roastMode: mode,
+      analysisDepth,
+      source: draft.source === "demo" ? "demo" as const : "user" as const,
+      clarificationHistory: [],
+    };
     setDraft(nextInput);
     setSoftError("");
-    setSavedId(null);
+    setSavedVersionId(null);
     setScreen("loading");
 
     try {
-      const [roastResult] = await Promise.all([analyzeProject(nextInput), wait(1900)]);
-      setResult(roastResult);
+      const [response] = await Promise.all([analyzeProject(nextInput), wait(1900)]);
+      setResult(response.result);
+      setAnalysisMeta(response.meta);
+      setUsageStats(incrementUsageStats(profile ? "registeredAnalyses" : "anonymousAnalyses"));
+      if (response.meta.source === "mock" && response.meta.reason !== "missing_api_key") {
+        setSoftError(fallbackNotice);
+      }
       setLastAnalysisTime(formatAnalysisTime());
       setScreen("result");
     } catch {
       setSoftError("AI не смог разнести проект. Возможно, проект разнес его первым.");
       setResult(getMockRoast(nextInput));
+      setAnalysisMeta(createLocalMeta("unknown"));
+      setUsageStats(incrementUsageStats(profile ? "registeredAnalyses" : "anonymousAnalyses"));
       setLastAnalysisTime(formatAnalysisTime());
       setScreen("result");
     }
   };
 
+  const persistCurrentResult = (profileForSave: UserProfile | null = profile, clarificationText?: string) => {
+    if (!result) return null;
+    const workspace = saveProjectVersion({
+      workspaceId: currentWorkspaceId,
+      ...(profileForSave?.id ? { userId: profileForSave.id } : {}),
+      input: draft,
+      result,
+      ...(analysisMeta ? { meta: analysisMeta } : {}),
+      ...(clarificationText ? { clarificationText } : {}),
+    });
+
+    const latest = workspace.versions.at(-1);
+    setCurrentWorkspaceId(workspace.id);
+    setSavedVersionId(latest?.id || null);
+    setWorkspaces(loadProjectWorkspaces());
+    return workspace;
+  };
+
   const saveCurrentResult = () => {
     if (!result) return;
-    const now = new Date().toISOString();
 
-    const item: RoastHistoryItem = {
-      id: savedId || createId(),
-      createdAt: savedId ? history.find((historyItem) => historyItem.id === savedId)?.createdAt || now : now,
-      updatedAt: now,
-      input: draft,
-      originalInput: draft,
-      result,
-      version: result.version || 1,
-      ...(result.refinedFromId ? { refinedFromId: result.refinedFromId } : {}),
-    };
+    if (!profile) {
+      setSignupIntent("save");
+      setSignupOpen(true);
+      return;
+    }
 
-    const nextHistory = addHistoryItem(item);
-    setHistory(nextHistory);
-    setSavedId(item.id);
+    persistCurrentResult(profile);
+    setSoftError("Разбор сохранен.");
   };
 
   const openHistoryItem = (item: RoastHistoryItem) => {
     setDraft({ ...emptyRoastInput, ...item.input });
     setResult(item.result);
-    setSavedId(item.id);
+    setAnalysisMeta(item.meta || createLocalMeta());
+    setSavedVersionId(null);
+    setCurrentWorkspaceId(null);
     setSoftError("");
     setLastAnalysisTime(new Date(item.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }));
     setScreen("result");
@@ -142,12 +225,41 @@ export default function App() {
   const removeHistoryItem = (id: string) => {
     const next = deleteHistoryItem(id);
     setHistory(next);
-    if (savedId === id) setSavedId(null);
+  };
+
+  const openWorkspace = (workspace: ProjectWorkspace, version: ProjectVersion = workspace.versions[workspace.versions.length - 1]) => {
+    setDraft({ ...emptyRoastInput, ...version.input });
+    setResult(version.result);
+    setAnalysisMeta(version.meta || createLocalMeta());
+    setCurrentWorkspaceId(workspace.id);
+    setSavedVersionId(version.id);
+    setSoftError("");
+    setLastAnalysisTime(new Date(version.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }));
+    setScreen("result");
+  };
+
+  const removeWorkspace = (id: string) => {
+    const next = deleteProjectWorkspace(id);
+    setWorkspaces(next);
+    if (currentWorkspaceId === id) {
+      setCurrentWorkspaceId(null);
+      setSavedVersionId(null);
+    }
+  };
+
+  const newWorkspaceVersion = (workspace: ProjectWorkspace) => {
+    const latest = workspace.versions[workspace.versions.length - 1];
+    setDraft({ ...emptyRoastInput, ...latest.input });
+    setCurrentWorkspaceId(workspace.id);
+    setSavedVersionId(null);
+    setScreen("mode");
   };
 
   const resetForNewRoast = () => {
     setResult(null);
-    setSavedId(null);
+    setAnalysisMeta(null);
+    setSavedVersionId(null);
+    setCurrentWorkspaceId(null);
     setSoftError("");
     setDraft((current) => ({
       ...emptyRoastInput,
@@ -201,39 +313,102 @@ export default function App() {
     setScreen("loading");
 
     try {
-      const [updatedResult] = await Promise.all([analyzeProject(updatedInput), wait(1900)]);
+      const [response] = await Promise.all([analyzeProject(updatedInput), wait(1900)]);
+      const updatedResult = response.result;
       const nextResult: RoastResult = {
         ...updatedResult,
         projectName: updatedResult.projectName || updatedInput.projectName || "Проект без названия",
         version: updatedResult.version || (previousResult.version || 1) + 1,
         clarificationCount:
           updatedResult.clarificationCount ?? updatedInput.clarificationHistory?.filter((message) => message.role === "user").length ?? 1,
-        ...(savedId ? { refinedFromId: savedId } : {}),
+        ...(savedVersionId ? { refinedFromId: savedVersionId } : {}),
       };
-      const item: RoastHistoryItem = {
-        id: createId(),
-        createdAt: now,
-        updatedAt: new Date().toISOString(),
-        input: updatedInput,
-        originalInput: previousDraft,
-        result: nextResult,
-        version: nextResult.version || 1,
-        ...(savedId ? { refinedFromId: savedId } : {}),
-      };
-
       setResult(nextResult);
-      setHistory(addHistoryItem(item));
-      setSavedId(item.id);
+      setAnalysisMeta(response.meta);
+      setUsageStats(incrementUsageStats("clarifications"));
+      if (profile) {
+        const workspace = saveProjectVersion({
+          workspaceId: currentWorkspaceId,
+          userId: profile.id,
+          input: updatedInput,
+          result: nextResult,
+          meta: response.meta,
+          clarificationText: trimmed,
+        });
+        const latest = workspace.versions.at(-1);
+        setCurrentWorkspaceId(workspace.id);
+        setSavedVersionId(latest?.id || null);
+        setWorkspaces(loadProjectWorkspaces());
+      } else {
+        setSavedVersionId(null);
+      }
+      if (response.meta.source === "mock" && response.meta.reason !== "missing_api_key") {
+        setSoftError(fallbackNotice);
+      }
       setLastAnalysisTime(formatAnalysisTime());
       setScreen("result");
     } catch {
       setDraft(previousDraft);
       setResult(previousResult);
+      setAnalysisMeta(analysisMeta);
       setSoftError("Не получилось пересобрать разбор. Старый результат сохранен.");
       setScreen("result");
     } finally {
       setIsRefining(false);
     }
+  };
+
+  const openSignup = (intent: SignupIntent) => {
+    setSignupIntent(intent);
+    setSignupOpen(true);
+  };
+
+  const handleSignupSubmit = (input: CreateUserProfileInput) => {
+    try {
+      const nextProfile = createUserProfile(input);
+      setProfile(nextProfile);
+      setSignupOpen(false);
+
+      if (signupIntent === "save" && result) {
+        persistCurrentResult(nextProfile);
+      }
+
+      if (signupIntent === "earlyAccess") {
+        const updated = updateUserProfile({ wantsEarlyAccess: true });
+        setProfile(updated || nextProfile);
+      }
+
+      setSignupIntent(null);
+      setSoftError(signupIntent === "save" ? "Разбор сохранен." : "");
+    } catch {
+      setSoftError("Не получилось создать локальный профиль. Проверь email и попробуй еще раз.");
+    }
+  };
+
+  const markEarlyAccess = () => {
+    if (!profile) {
+      setPremiumOpen(false);
+      openSignup("earlyAccess");
+      return;
+    }
+
+    const updated = updateUserProfile({ wantsEarlyAccess: true });
+    if (updated) {
+      setProfile(updated);
+      setSoftError("Готово. Отметили интерес к Pro-доступу.");
+    }
+    setPremiumOpen(false);
+  };
+
+  const updateProfileSource = (source: AcquisitionSource) => {
+    const updated = updateUserProfile({ acquisitionSource: source });
+    if (updated) setProfile(updated);
+  };
+
+  const clearLocalProfile = () => {
+    clearUserProfile();
+    setProfile(null);
+    setSoftError("Локальный профиль очищен. Разборы в библиотеке остались в браузере.");
   };
 
   const goAnalyze = () => setScreen("input");
@@ -244,6 +419,7 @@ export default function App() {
     { label: "Modes", onClick: goModes },
     { label: "History", onClick: () => setScreen("history") },
     { label: "Example", onClick: () => openDemoResult() },
+    { label: "Profile", onClick: () => setScreen("profile") },
   ];
 
   return (
@@ -279,11 +455,11 @@ export default function App() {
 
           <button
             type="button"
-            onClick={() => openDemoResult()}
+            onClick={() => setScreen("profile")}
             className="inline-flex min-h-9 items-center gap-2 rounded-full border border-black/10 bg-white/50 px-4 text-[11px] font-bold uppercase tracking-[0.16em] text-[#20262b] shadow-[inset_0_1px_0_rgba(255,255,255,0.88)] transition hover:bg-white/72"
           >
             <CircleUserRound className="h-3.5 w-3.5" />
-            Demo
+            {profile ? "Profile" : "Create profile"}
           </button>
         </div>
       </header>
@@ -301,7 +477,7 @@ export default function App() {
           {screen === "home" ? (
             <Hero
               key="home"
-              historyCount={history.length}
+              historyCount={workspaces.length + history.length}
               onStart={goAnalyze}
               onDemo={() => openDemoResult()}
               onDemoSelect={openDemoResult}
@@ -339,6 +515,7 @@ export default function App() {
               key="result"
               input={draft}
               result={result}
+              meta={analysisMeta || createLocalMeta()}
               saved={saved}
               lastAnalysisTime={lastAnalysisTime}
               onBackToMode={() => setScreen("mode")}
@@ -347,6 +524,7 @@ export default function App() {
               onToneAdjust={(mode: RoastMode, analysisDepth) => void startAnalyze(mode, analysisDepth)}
               onRefine={(clarificationText) => void refineAnalysisWithContext(clarificationText)}
               isRefining={isRefining}
+              onCompareVersions={currentWorkspaceId ? () => setScreen("history") : undefined}
             />
           ) : null}
 
@@ -354,19 +532,53 @@ export default function App() {
             <HistoryPanel
               key="history"
               history={history}
+              workspaces={workspaces}
               onOpen={openHistoryItem}
               onDelete={removeHistoryItem}
               onRepeat={(item) => {
                 setDraft({ ...emptyRoastInput, ...item.input });
-                setSavedId(null);
+                setSavedVersionId(null);
+                setCurrentWorkspaceId(null);
                 setScreen("mode");
               }}
+              onOpenWorkspace={openWorkspace}
+              onDeleteWorkspace={removeWorkspace}
+              onNewWorkspaceVersion={newWorkspaceVersion}
               onBack={() => setScreen(result ? "result" : "home")}
               onStart={resetForNewRoast}
             />
           ) : null}
+
+          {screen === "profile" ? (
+            <ProfilePanel
+              key="profile"
+              profile={profile}
+              usageStats={usageStats}
+              workspaces={workspaces}
+              onBack={() => setScreen(result ? "result" : "home")}
+              onCreateProfile={() => openSignup("profile")}
+              onUpdateSource={updateProfileSource}
+              onClearProfile={clearLocalProfile}
+              onEarlyAccess={markEarlyAccess}
+            />
+          ) : null}
         </AnimatePresence>
       </main>
+
+      <SoftSignupModal
+        open={signupOpen}
+        onClose={() => {
+          setSignupOpen(false);
+          setSignupIntent(null);
+        }}
+        onSubmit={handleSignupSubmit}
+        title={signupIntent === "limit" ? "Создай профиль, чтобы продолжить" : undefined}
+        cta={signupIntent === "save" ? "Сохранить разбор" : "Создать профиль"}
+      />
+
+      <PremiumTeaser open={premiumOpen} onClose={() => setPremiumOpen(false)} onEarlyAccess={markEarlyAccess} />
+
+      <AcquisitionDebugPanel profile={profile} usageStats={usageStats} workspaces={workspaces} />
 
       <motion.nav
         initial={{ opacity: 0, y: 18 }}
@@ -378,7 +590,7 @@ export default function App() {
           <BottomNavButton active={screen === "home"} label="Home" Icon={Home} onClick={() => setScreen("home")} />
           <BottomNavButton active={screen === "input" || screen === "mode"} label="Analyze" Icon={ScanLine} onClick={goAnalyze} />
           <BottomNavButton active={screen === "history"} label="History" Icon={History} onClick={() => setScreen("history")} />
-          <BottomNavButton active={screen === "result"} label="Library" Icon={Archive} onClick={() => setScreen(result ? "result" : "history")} />
+          <BottomNavButton active={screen === "profile"} label="Profile" Icon={UserRound} onClick={() => setScreen("profile")} />
           <button
             type="button"
             onClick={goAnalyze}

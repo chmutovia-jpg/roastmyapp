@@ -23,6 +23,22 @@ export function formatOffer(result: RoastResult): string {
   ].join("\n");
 }
 
+export function formatLaunchPack(result: RoastResult): string {
+  const pack = result.launchPack;
+  if (!pack) return "";
+
+  return [
+    `Telegram:\n${pack.telegramPost}`,
+    "",
+    `Bio:\n${pack.profileBio}`,
+    "",
+    `Landing headline:\n${pack.landingHeadline}`,
+    "",
+    "Комментарии для Threads:",
+    pack.replyComments.map((item) => `- ${item}`).join("\n"),
+  ].join("\n");
+}
+
 export function formatFullReport(input: RoastInput, result: RoastResult): string {
   const weakPoints = (Object.entries(result.weakPoints) as [WeakPointKey, RoastResult["weakPoints"][WeakPointKey]][])
     .map(([key, point]) => `- ${weakPointLabels[key]}: ${point.score}/10 — ${point.comment}`)
@@ -64,6 +80,9 @@ export function formatFullReport(input: RoastInput, result: RoastResult): string
     "",
     "Threads-посты:",
     formatThreadsPosts(result),
+    result.launchPack ? "" : "",
+    result.launchPack ? "Launch Pack:" : "",
+    result.launchPack ? formatLaunchPack(result) : "",
     "",
     "Следующий спринт:",
     `30 минут:\n${result.nextSprint.thirtyMinutes.map((item) => `- ${item}`).join("\n")}`,

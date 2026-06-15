@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+﻿import { motion } from "framer-motion";
 import {
   ArrowLeft,
   BadgeDollarSign,
@@ -98,7 +98,7 @@ export function RoastModeSelector({
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_360px]">
         <div>
           <StepIndicator current="mode" />
-          <h1 className="font-editorial mt-5 text-4xl font-medium leading-[0.98] tracking-[-0.055em] text-[#101418] sm:text-6xl">
+          <h1 className="apple-heading font-apple-display mt-5 text-4xl text-[#101418] sm:text-6xl">
             Выбери, кто будет разносить.
           </h1>
           <p className="mt-5 max-w-md text-base leading-8 text-[#20262b]/58">

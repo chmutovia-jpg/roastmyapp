@@ -117,6 +117,8 @@ ${depthRules[input.analysisDepth]}
 - Не используй фразы “проведите исследование рынка” без конкретного действия.
 - Обязательно дай ровно 3 Threads-поста.
 - Посты должны быть короткими, живыми и подходить для человека, который публично собирает AI-продукты.
+- Обязательно верни launchPack: Telegram-пост, bio, landing headline и 5 reply comments.
+- Launch Pack должен быть shareable и сразу пригоден для запуска, без корпоративного тона.
 
 Верни строго JSON без markdown.
 
@@ -156,6 +158,12 @@ JSON schema:
     "oneHour": string[],
     "twoHours": string[],
     "todayLaunchMove": string
+  },
+  "launchPack": {
+    "telegramPost": string,
+    "profileBio": string,
+    "landingHeadline": string,
+    "replyComments": string[]
   },
   "assumptions": string[],
   "misunderstoodRisk": string[],
